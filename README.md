@@ -125,6 +125,8 @@ Next, you can use AWS Serverless Application Repository to deploy ready to use A
 Getting Started: https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/serverless-getting-started-hello-world.html
 
 Deploy:
+Copy from `.env.secret` to the last line in `samconfig.toml`
 ```
-sam deploy --parameter-overrides Channel=xxx/yyy/zzz
+sam build
+sam deploy
 ```

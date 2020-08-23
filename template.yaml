@@ -5,35 +5,63 @@ Parameters:
   Channel:
     Description: "The channel of Slack to push the message"
     Type: String
+  CloudTrailLogGroup:
+    Description: "The name of Cloud Trail log group storing global events"
+    Type: String
+  CloudTrailLogGroupArn:
+    Description: "The ARN of Cloud Trail log group storing global events"
+    Type: String
 
-# More info about Globals: https://github.com/awslabs/serverless-application-model/blob/master/docs/globals.rst
 Globals:
   Function:
     Timeout: 3
 
 Resources:
-  RootActivityRule:
-    Type: AWS::Events::Rule
-    Properties:
-      Description: Events rule for monitoring root API activity (Login)
-      State: ENABLED
-      EventPattern:
-        detail-type:
-          - AWS API Call via CloudTrail
-        detail:
-          userIdentity:
-            - Root
-      Targets:
-        - Arn: !GetAtt
-            - RootActivityFunction
-            - Arn
-          Id: !Ref AWS::StackName
-
+  # Root Activity in region ap-southeast-1
   RootActivityFunction:
-    Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+    Type: AWS::Serverless::Function
     Properties:
       CodeUri: root_activity_alert/
-      Handler: app.lambda_handler
+      Handler: root_activity.lambda_handler
+      Runtime: python3.8
+      Events:
+        RootActivityRule:
+          Type: CloudWatchEvent
+          Properties:
+            Pattern:
+              detail-type:
+                - AWS API Call via CloudTrail
+              detail:
+                userIdentity:
+                  type:
+                    - Root
+      Environment:
+        Variables:
+          CHANNEL: !Ref Channel
+
+  # Root Login on global
+  RootLoginCloudWatchFilter:
+    Type: AWS::Logs::SubscriptionFilter
+    Properties:
+      FilterPattern: '{$.eventName = "ConsoleLogin" && $.userIdentity.type = "Root"}'
+      DestinationArn: !GetAtt
+        - RootLoginFunction
+        - Arn
+      LogGroupName: !Ref CloudTrailLogGroup
+
+  RootLoginFunctionPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref RootLoginFunction
+      Principal: logs.amazonaws.com
+      SourceArn: !Ref CloudTrailLogGroupArn
+
+  RootLoginFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: root_activity_alert/
+      Handler: root_login.lambda_handler
       Runtime: python3.8
       Environment:
         Variables:
@@ -45,4 +73,7 @@ Outputs:
   # https://github.com/awslabs/serverless-application-model/blob/master/docs/internals/generated_resources.rst#api
   RootActivityFunction:
     Description: "Root Activity Lambda Function ARN"
+    Value: !GetAtt RootActivityFunction.Arn
+  RootLoginFunction:
+    Description: "Root Login Lambda Function ARN"
     Value: !GetAtt RootActivityFunction.Arn
